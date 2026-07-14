@@ -18,7 +18,7 @@ spec:
       - name: cont1
         image: yashwanthdutt26/nodejsimage:7f8367d3e70f28c920f87f56e72c007cd60f3418
         ports:
-          - containerPort: 8080
+          - containerPort: 80
 ---
 apiVersion: v1
 kind: Service
@@ -29,5 +29,5 @@ spec:
   selector:
     app: zomato
   ports:
-    - port: 8080
+    - port: 80
       nodePort: 31111
