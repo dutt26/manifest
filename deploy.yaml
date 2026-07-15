@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: cont1
-        image: yashwanthdutt26/nodejsimage
+        image: yashwanthdutt26/nodejsimage:7f8367d3e70f28c920f87f56e72c007cd60f3418
         ports:
           - containerPort: 3000
 ---
