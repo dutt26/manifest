@@ -59,7 +59,7 @@ pipeline {
         stage("OWASP Dependency-Check") {
             steps {
                 // Scans third-party node packages for published application vulnerabilities
-                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
+                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'OWASP Dependency-Check'
                 dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
             }
         }
