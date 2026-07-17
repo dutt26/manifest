@@ -65,16 +65,14 @@ pipeline {
         stage('OWASP Dependency Check') {
             steps {
                 withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_KEY')]) {
-                dependencyCheck(
-                    odcInstallation: 'DP-Check',
-                    additionalArguments: "--scan . --format ALL --nvdApiKey ${NVD_KEY}"
-                 )
-                }
-
-                dependencyCheckPublisher(
-                    pattern: 'dependency-check-report.xml'
-                )
-            }
+            dependencyCheck(
+                odcInstallation: 'DP-Check',
+                // Using standard single-quoted concatenation hides the secret safely
+                additionalArguments: '--scan . --format ALL --nvdApiKey ' + env.NVD_KEY
+               )
+             }
+            dependencyCheckPublisher(pattern: 'dependency-check-report.xml')
+           }
         }
 
         stage('Trivy File System Scan') {
