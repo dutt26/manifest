@@ -1,83 +1,89 @@
 pipeline {
     agent any
-    
+
     tools {
-        jdk 'jdk17'       // Must match your Jenkins Global Tool Configuration name for JDK
-        nodejs 'node16'   // Must match your Jenkins Global Tool Configuration name for Node.js
+        jdk 'jdk17'        // Must match your Jenkins Global Tool Configuration name for JDK
+        nodejs 'node16'    // Must match your Jenkins Global Tool Configuration name for Node.js
     }
-    
+
     environment {
-        SCANNER_HOME = tool 'mysonar'               // Resolves the SonarQube Scanner tool
-        AWS_REG = 'ap-south-1'                      // Your AWS EKS Cluster Region
-        CLUSTER_NAME = 'yash-cluster-1'             // Your AWS EKS Cluster Name
-        IMAGE_NAME = 'image1'
-        IMAGE_TAG = 'latest'
-        DOCKER_USER = 'yashwanthdutt26'             // Your Docker Hub Username
-        REPO_NAME = 'zomato'                        // Your Docker Hub Repository
+        SCANNER_HOME = tool 'mysonar'     // Resolves the SonarQube Scanner tool
+        AWS_REG      = 'ap-south-1'       // Your AWS EKS Cluster Region
+        CLUSTER_NAME = 'yash-cluster-1'   // Your AWS EKS Cluster Name
+        IMAGE_NAME   = 'image1'
+        IMAGE_TAG    = 'latest'
+        DOCKER_USER  = 'yashwanthdutt26'  // Your Docker Hub Username
+        REPO_NAME    = 'zomato'           // Your Docker Hub Repository
     }
-    
+
     stages {
+
         stage("Clean Workspace") {
             steps {
                 cleanWs()
             }
         }
-        
+
         stage("Git Checkout") {
             steps {
-                git branch: 'master', url: 'https://github.com/dutt26/Zomato-Project.git'
+                git branch: 'master',
+                    url: 'https://github.com/dutt26/Zomato-Project.git'
             }
         }
-        
+
         stage("Sonarqube Analysis") {
             steps {
-                withSonarQubeEnv('mysonar') { 
-                    sh """$SCANNER_HOME/bin/sonar-scanner \
-                    -Dsonar.projectName=zomato \
-                    -Dsonar.projectKey=zomato \
-                    -Dsonar.sources=. \
-                    -Dsonar.exclusions=**/node_modules/**"""
+                withSonarQubeEnv('mysonar') {
+                    sh """
+                        \$SCANNER_HOME/bin/sonar-scanner \
+                        -Dsonar.projectName=zomato \
+                        -Dsonar.projectKey=zomato \
+                        -Dsonar.sources=. \
+                        -Dsonar.exclusions=**/node_modules/**
+                    """
                 }
             }
         }
-        
+
         stage("Quality Gates") {
             steps {
                 script {
-                    // Verifies analysis reports against SonarQube server parameters
-                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar-token'
+                    waitForQualityGate(
+                        abortPipeline: false,
+                        credentialsId: 'sonar-token'
+                    )
                 }
             }
         }
-        
+
         stage("Install Dependencies") {
             steps {
-                // Installs packages first so they are present for the OWASP scanner
                 sh 'npm install'
             }
         }
-        
-        stage('OWASP FS SCAN') {
-    steps {
-        // Enclose the arguments in quotes and ensure 'odcInstallation' matches your Jenkins Global Tool Configuration name exactly
-        dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
-        
-        // Publish the results
-        dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-    }
-}
-        
+
+        stage("OWASP FS SCAN") {
+            steps {
+                dependencyCheck(
+                    additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit',
+                    odcInstallation: 'DP-Check'
+                )
+
+                dependencyCheckPublisher(
+                    pattern: '**/dependency-check-report.xml'
+                )
+            }
+        }
+
         stage("Trivy FS Scan") {
             steps {
-                // Scans filesystem for configuration issues or exposed secrets
                 sh 'trivy fs --severity HIGH,CRITICAL . > trivyfs.txt'
             }
         }
-        
+
         stage("Docker Build & Cache") {
             steps {
                 script {
-                    // Builds container matching the advanced buildx specifications and opencontainer labels
                     sh """
                         docker buildx build \
                         --context . \
@@ -93,9 +99,9 @@ pipeline {
                         --load .
                     """
 
-                    // Rotates local docker cache layers
                     sh """
                         rm -rf /tmp/.buildx-cache
+
                         if [ -d "/tmp/.buildx-cache-new" ]; then
                             mv /tmp/.buildx-cache-new /tmp/.buildx-cache
                         fi
@@ -118,22 +124,20 @@ pipeline {
             steps {
                 script {
                     try {
-                        // Spins up temporary target environment container locally to test health
                         sh """
                             docker run -d \
                             --name zomato-test \
                             -p 3000:3000 \
                             ${IMAGE_NAME}:${IMAGE_TAG}
                         """
-                        
+
                         sleep time: 20, unit: 'SECONDS'
-                        
+
                         sh """
                             docker ps
                             docker logs zomato-test
                         """
                     } finally {
-                        // Guarantees container cleanup regardless of whether test command succeeds or fails
                         sh "docker rm -f zomato-test || true"
                     }
                 }
@@ -144,9 +148,15 @@ pipeline {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'docker-password') {
-                        // Tags local build context into remote registry naming standards
-                        sh "docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${DOCKER_USER}/${REPO_NAME}:myzomatoimage"
-                        sh "docker push ${DOCKER_USER}/${REPO_NAME}:myzomatoimage"
+
+                        sh """
+                            docker tag ${IMAGE_NAME}:${IMAGE_TAG} \
+                            ${DOCKER_USER}/${REPO_NAME}:myzomatoimage
+                        """
+
+                        sh """
+                            docker push ${DOCKER_USER}/${REPO_NAME}:myzomatoimage
+                        """
                     }
                 }
             }
@@ -154,20 +164,22 @@ pipeline {
 
         stage("Deploy to Amazon EKS") {
             steps {
-                // Safely maps your Jenkins AWS IAM API credentials into standard system keys
-                withCredentials([usernamePassword(credentialsId: 'aws-credentials', passwordVariable: 'AWS_SECRET_ACCESS_KEY', usernameVariable: 'AWS_ACCESS_KEY_ID')]) {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'aws-credentials',
+                        usernameVariable: 'AWS_ACCESS_KEY_ID',
+                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                    )
+                ]) {
                     script {
-                        env.AWS_ACCESS_KEY_ID = AWS_ACCESS_KEY_ID
+                        env.AWS_ACCESS_KEY_ID     = AWS_ACCESS_KEY_ID
                         env.AWS_SECRET_ACCESS_KEY = AWS_SECRET_ACCESS_KEY
-                        env.AWS_DEFAULT_REGION = AWS_REG
+                        env.AWS_DEFAULT_REGION    = AWS_REG
 
-                        // Authenticate kubectl context with EKS Control Plane
                         sh "aws eks update-kubeconfig --region ${AWS_REG} --name ${CLUSTER_NAME}"
-                        
-                        // Push new declaration matrix to your cluster
+
                         sh "kubectl apply -f manifest.yaml"
-                        
-                        // Trigger dynamic rolling restart to fetch the newly pushed image
+
                         sh "kubectl rollout restart deployment/zomato-deployment"
                     }
                 }
