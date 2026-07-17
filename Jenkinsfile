@@ -8,67 +8,65 @@ pipeline {
 
     environment {
         SCANNER_HOME = tool 'mysonar'
-        AWS_REG      = 'ap-south-1'
-        CLUSTER_NAME = 'yash-cluster-1'
-        IMAGE_NAME   = 'image1'
-        IMAGE_TAG    = 'latest'
-        DOCKER_USER  = 'yashwanthdutt26'
-        REPO_NAME    = 'zomato'
+
+        IMAGE_NAME  = 'image1'
+        IMAGE_TAG   = "${BUILD_NUMBER}"
+
+        DOCKER_USER = 'yashwanthdutt26'
+        REPO_NAME   = 'zomato'
+
+        CONTAINER_NAME = 'zomato-container'
+        APP_PORT = '3000'
     }
 
     stages {
 
-        stage("Clean Workspace") {
+        stage('Clean Workspace') {
             steps {
                 cleanWs()
             }
         }
 
-        stage("Git Checkout") {
+        stage('Checkout Source Code') {
             steps {
-                git(
-                    branch: 'master',
+                git branch: 'master',
                     url: 'https://github.com/dutt26/Zomato-Project.git'
-                )
             }
         }
 
-        stage("Sonarqube Analysis") {
+        stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('mysonar') {
                     sh """
-                        \$SCANNER_HOME/bin/sonar-scanner \
-                        -Dsonar.projectName=zomato \
-                        -Dsonar.projectKey=zomato \
-                        -Dsonar.sources=. \
-                        -Dsonar.exclusions=**/node_modules/**
+                    \$SCANNER_HOME/bin/sonar-scanner \
+                      -Dsonar.projectName=zomato \
+                      -Dsonar.projectKey=zomato \
+                      -Dsonar.sources=. \
+                      -Dsonar.exclusions=**/node_modules/**
                     """
                 }
             }
         }
 
-        stage("Quality Gates") {
+        stage('Quality Gate') {
             steps {
-                script {
-                    waitForQualityGate(
-                        abortPipeline: false,
-                        credentialsId: 'sonar-token'
-                    )
+                timeout(time: 10, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
                 }
             }
         }
 
-        stage("Install Dependencies") {
+        stage('Install Dependencies') {
             steps {
                 sh 'npm install'
             }
         }
 
-        stage("OWASP Dependency Scan") {
+        stage('OWASP Dependency Check') {
             steps {
                 dependencyCheck(
-                    additionalArguments: '--scan ./ --format ALL --prettyPrint',
-                    odcInstallation: 'DP-Check'
+                    odcInstallation: 'DP-Check',
+                    additionalArguments: '--scan . --format ALL'
                 )
 
                 dependencyCheckPublisher(
@@ -77,112 +75,129 @@ pipeline {
             }
         }
 
-        stage("Trivy FS Scan") {
+        stage('Trivy File System Scan') {
             steps {
-                sh 'trivy fs --severity HIGH,CRITICAL . > trivyfs.txt'
+                sh '''
+                trivy fs \
+                --severity HIGH,CRITICAL \
+                --exit-code 0 \
+                . > trivyfs.txt
+                '''
             }
         }
 
-        stage("Docker Build & Cache") {
-            steps {
-                script {
-                    sh """
-                        docker buildx build \
-                        --context . \
-                        --file Dockerfile \
-                        --tag ${IMAGE_NAME}:${IMAGE_TAG} \
-                        --tag ${IMAGE_NAME}:latest \
-                        --cache-from=type=local,src=/tmp/.buildx-cache \
-                        --cache-to=type=local,dest=/tmp/.buildx-cache-new,mode=max \
-                        --label org.opencontainers.image.title="Zomato" \
-                        --label org.opencontainers.image.source="https://github.com/dutt26/Zomato-Project" \
-                        --label org.opencontainers.image.version="${env.BUILD_NUMBER}" \
-                        --label org.opencontainers.image.created="${env.BUILD_ID}" \
-                        --load .
-                    """
-
-                    sh """
-                        rm -rf /tmp/.buildx-cache
-
-                        if [ -d "/tmp/.buildx-cache-new" ]; then
-                            mv /tmp/.buildx-cache-new /tmp/.buildx-cache
-                        fi
-                    """
-                }
-            }
-        }
-
-        stage("Verify & Validate Image") {
+        stage('Build Docker Image') {
             steps {
                 sh """
-                    docker images
-                    docker image inspect ${IMAGE_NAME}:${IMAGE_TAG}
-                    trivy image --severity HIGH,CRITICAL ${IMAGE_NAME}:${IMAGE_TAG}
+                docker build \
+                    -t ${IMAGE_NAME}:${IMAGE_TAG} \
+                    -t ${DOCKER_USER}/${REPO_NAME}:latest .
                 """
             }
         }
 
-        stage("Smoke Test Container") {
+        stage('Trivy Image Scan') {
+            steps {
+                sh """
+                trivy image \
+                    --severity HIGH,CRITICAL \
+                    --exit-code 0 \
+                    ${IMAGE_NAME}:${IMAGE_TAG}
+                """
+            }
+        }
+
+        stage('Smoke Test') {
             steps {
                 script {
-                    try {
-                        sh """
-                            docker run -d \
-                            --name zomato-test \
-                            -p 3000:3000 \
-                            ${IMAGE_NAME}:${IMAGE_TAG}
-                        """
+                    sh """
+                    docker rm -f test-container || true
 
-                        sleep time: 20, unit: 'SECONDS'
+                    docker run -d \
+                        --name test-container \
+                        -p 3001:3000 \
+                        ${IMAGE_NAME}:${IMAGE_TAG}
 
-                        sh """
-                            docker ps
-                            docker logs zomato-test
-                        """
-                    } finally {
-                        sh "docker rm -f zomato-test || true"
-                    }
+                    sleep 20
+
+                    docker ps
+
+                    docker logs test-container
+
+                    docker rm -f test-container
+                    """
                 }
             }
         }
 
-        stage("Push Image to Registry") {
+        stage('Push Image to Docker Hub') {
             steps {
                 script {
-                    withDockerRegistry(credentialsId: 'docker-password') {
-                        sh """
-                            docker tag ${IMAGE_NAME}:${IMAGE_TAG} \
-                            ${DOCKER_USER}/${REPO_NAME}:myzomatoimage
-                        """
+
+                    withDockerRegistry(
+                        credentialsId: 'docker-password',
+                        url: ''
+                    ) {
 
                         sh """
-                            docker push ${DOCKER_USER}/${REPO_NAME}:myzomatoimage
+                        docker push ${DOCKER_USER}/${REPO_NAME}:latest
                         """
                     }
+
                 }
             }
         }
 
-        stage("Deploy to Amazon EKS") {
+        stage('Deploy Docker Container') {
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'aws-credentials',
-                        usernameVariable: 'AWS_ACCESS_KEY_ID',
-                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
-                    )
-                ]) {
-                    script {
-                        env.AWS_ACCESS_KEY_ID     = AWS_ACCESS_KEY_ID
-                        env.AWS_SECRET_ACCESS_KEY = AWS_SECRET_ACCESS_KEY
-                        env.AWS_DEFAULT_REGION    = AWS_REG
+                script {
 
-                        sh "aws eks update-kubeconfig --region ${AWS_REG} --name ${CLUSTER_NAME}"
-                        sh "kubectl apply -f manifest.yaml"
-                        sh "kubectl rollout restart deployment/zomato-deployment"
-                    }
+                    sh """
+                    echo "Stopping existing container..."
+
+                    docker stop ${CONTAINER_NAME} || true
+                    docker rm ${CONTAINER_NAME} || true
+
+                    echo "Pulling latest image..."
+
+                    docker pull ${DOCKER_USER}/${REPO_NAME}:latest
+
+                    echo "Starting container..."
+
+                    docker run -d \
+                        --name ${CONTAINER_NAME} \
+                        --restart unless-stopped \
+                        -p ${APP_PORT}:3000 \
+                        ${DOCKER_USER}/${REPO_NAME}:latest
+
+                    docker ps
+                    """
+
                 }
             }
+        }
+
+    }
+
+    post {
+
+        always {
+            echo 'Pipeline Finished'
+        }
+
+        success {
+            echo 'Application deployed successfully.'
+        }
+
+        failure {
+            echo 'Pipeline failed.'
+        }
+
+        cleanup {
+            sh '''
+            docker image prune -f || true
+            docker container prune -f || true
+            '''
         }
     }
 }
