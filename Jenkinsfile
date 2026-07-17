@@ -8,12 +8,12 @@ pipeline {
     
     environment {
         SCANNER_HOME = tool 'mysonar'               // Resolves the SonarQube Scanner tool
-        AWS_REG = 'ap-south-1'                       // Your AWS EKS Cluster Region
+        AWS_REG = 'ap-south-1'                      // Your AWS EKS Cluster Region
         CLUSTER_NAME = 'yash-cluster-1'             // Your AWS EKS Cluster Name
         IMAGE_NAME = 'image1'
         IMAGE_TAG = 'latest'
-        DOCKER_USER = 'yashwanthdutt26'                  // Your Docker Hub Username
-        REPO_NAME = 'zomato'         // Your Docker Hub Repository
+        DOCKER_USER = 'yashwanthdutt26'             // Your Docker Hub Username
+        REPO_NAME = 'zomato'                        // Your Docker Hub Repository
     }
     
     stages {
@@ -52,19 +52,21 @@ pipeline {
         
         stage("Install Dependencies") {
             steps {
+                // Installs packages first so they are present for the OWASP scanner
                 sh 'npm install'
             }
         }
         
         stage('OWASP Dependency-Check') {
-    steps {
-        // 1. Force Jenkins to resolve and provision the tool environment
-        def dpCheckTool = tool 'DP-Check'
-        
-        // 2. Pass the exact tool installation name to the step execution
-        dependencyCheck odcAnaArgs: " --path .", odcInstallationId: 'DP-Check'
-    }
-}
+            steps {
+                script {
+                    // Force Jenkins to resolve the tool and invoke the scan
+                    def dpCheckTool = tool 'DP-Check'
+                    dependencyCheck odcInstallation: 'DP-Check'
+                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                }
+            }
+        }
         
         stage("Trivy FS Scan") {
             steps {
