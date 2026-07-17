@@ -57,12 +57,15 @@ pipeline {
             }
         }
         
-        stage('OWASP') {
-            steps {
-                 def dpCheckHome = tool 'DP-Check' // Must match the exact name in Jenkins Tools configuration
-                 dependencyCheck additionalArguments: "---scan .", odcInstallation: 'DP-Check'
-             }
+       stage('OWASP') {
+    steps {
+        script {
+            def dpCheckHome = tool 'DP-Check'
+            // Use your variable here if needed, or run your scan
+            dependencyCheck additionalArguments: "---scan .", odcInstallation: 'DP-Check'
         }
+    }
+}
         
         stage("Trivy FS Scan") {
             steps {
