@@ -56,13 +56,15 @@ pipeline {
             }
         }
         
-        stage("OWASP Dependency-Check") {
-            steps {
-                // Scans third-party node packages for published application vulnerabilities
-                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'dp-check'
-                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-            }
-        }
+        stage('OWASP Dependency-Check') {
+    steps {
+        // 1. Force Jenkins to resolve and provision the tool environment
+        def dpCheckTool = tool 'DP-Check'
+        
+        // 2. Pass the exact tool installation name to the step execution
+        dependencyCheck odcAnaArgs: " --path .", odcInstallationId: 'DP-Check'
+    }
+}
         
         stage("Trivy FS Scan") {
             steps {
