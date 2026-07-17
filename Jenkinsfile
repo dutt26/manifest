@@ -57,13 +57,10 @@ pipeline {
             }
         }
         
-        stage('OWASP Dependency-Check') {
+        stage("OWASP") {
             steps {
-                script {
-                    // Force Jenkins to resolve the tool and invoke the scan
-                    def dpCheckHome = tool 'DP-Check'
-                    dependencyCheck odcInstallation: 'DP-Check'
-                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
+                dependencyCheckPublisher pattern: ' /dependency-check-report.xml'
                 }
             }
         }
