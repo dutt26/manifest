@@ -57,13 +57,13 @@ pipeline {
             }
         }
         
-       stage('OWASP') {
+        stage('OWASP FS SCAN') {
     steps {
-        script {
-            def dpCheckHome = tool 'DP-Check'
-            // Use your variable here if needed, or run your scan
-            dependencyCheck additionalArguments: "---scan .", odcInstallation: 'DP-Check'
-        }
+        // Enclose the arguments in quotes and ensure 'odcInstallation' matches your Jenkins Global Tool Configuration name exactly
+        dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
+        
+        // Publish the results
+        dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
     }
 }
         
