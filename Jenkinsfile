@@ -2,18 +2,18 @@ pipeline {
     agent any
 
     tools {
-        jdk 'jdk17'        // Must match your Jenkins Global Tool Configuration name for JDK
-        nodejs 'node16'    // Must match your Jenkins Global Tool Configuration name for Node.js
+        jdk 'jdk17'
+        nodejs 'node16'
     }
 
     environment {
-        SCANNER_HOME = tool 'mysonar'     // Resolves the SonarQube Scanner tool
-        AWS_REG      = 'ap-south-1'       // Your AWS EKS Cluster Region
-        CLUSTER_NAME = 'yash-cluster-1'   // Your AWS EKS Cluster Name
+        SCANNER_HOME = tool 'mysonar'
+        AWS_REG      = 'ap-south-1'
+        CLUSTER_NAME = 'yash-cluster-1'
         IMAGE_NAME   = 'image1'
         IMAGE_TAG    = 'latest'
-        DOCKER_USER  = 'yashwanthdutt26'  // Your Docker Hub Username
-        REPO_NAME    = 'zomato'           // Your Docker Hub Repository
+        DOCKER_USER  = 'yashwanthdutt26'
+        REPO_NAME    = 'zomato'
     }
 
     stages {
@@ -26,8 +26,10 @@ pipeline {
 
         stage("Git Checkout") {
             steps {
-                git branch: 'master',
+                git(
+                    branch: 'master',
                     url: 'https://github.com/dutt26/Zomato-Project.git'
+                )
             }
         }
 
@@ -62,15 +64,15 @@ pipeline {
             }
         }
 
-        stage("OWASP FS SCAN") {
+        stage("OWASP Dependency Scan") {
             steps {
                 dependencyCheck(
-                    additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit',
+                    additionalArguments: '--scan ./ --format ALL --prettyPrint',
                     odcInstallation: 'DP-Check'
                 )
 
                 dependencyCheckPublisher(
-                    pattern: '**/dependency-check-report.xml'
+                    pattern: 'dependency-check-report.xml'
                 )
             }
         }
@@ -148,7 +150,6 @@ pipeline {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'docker-password') {
-
                         sh """
                             docker tag ${IMAGE_NAME}:${IMAGE_TAG} \
                             ${DOCKER_USER}/${REPO_NAME}:myzomatoimage
@@ -177,9 +178,7 @@ pipeline {
                         env.AWS_DEFAULT_REGION    = AWS_REG
 
                         sh "aws eks update-kubeconfig --region ${AWS_REG} --name ${CLUSTER_NAME}"
-
                         sh "kubectl apply -f manifest.yaml"
-
                         sh "kubectl rollout restart deployment/zomato-deployment"
                     }
                 }
