@@ -61,7 +61,7 @@ pipeline {
             steps {
                 script {
                     // Force Jenkins to resolve the tool and invoke the scan
-                    def dpCheckTool = tool 'DP-Check'
+                    def dpCheckHome = tool 'DP-Check'
                     dependencyCheck odcInstallation: 'DP-Check'
                     dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
                 }
