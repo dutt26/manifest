@@ -57,11 +57,11 @@ pipeline {
             }
         }
         
-         stage("OWASP") {
+        stage('OWASP') {
             steps {
-                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
-                dependencyCheckPublisher pattern: ' /dependency-check-report.xml'
-            }
+                 def dpCheckHome = tool 'DP-Check' // Must match the exact name in Jenkins Tools configuration
+                 dependencyCheck additionalArguments: "---scan .", odcInstallation: 'DP-Check'
+             }
         }
         
         stage("Trivy FS Scan") {
