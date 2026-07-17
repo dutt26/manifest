@@ -91,7 +91,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 sh """
-                docker build \
+                sudo docker build \
                     -t ${IMAGE_NAME}:${IMAGE_TAG} \
                     -t ${DOCKER_USER}/${REPO_NAME}:latest .
                 """
@@ -113,9 +113,9 @@ pipeline {
             steps {
                 script {
                     sh """
-                    docker rm -f test-container || true
+                    sudo docker rm -f test-container || true
 
-                    docker run -d \
+                    sudo docker run -d \
                         --name test-container \
                         -p 3001:3000 \
                         ${IMAGE_NAME}:${IMAGE_TAG}
@@ -142,7 +142,7 @@ pipeline {
                     ) {
 
                         sh """
-                        docker push ${DOCKER_USER}/${REPO_NAME}:latest
+                        sudo docker push ${DOCKER_USER}/${REPO_NAME}:latest
                         """
                     }
 
