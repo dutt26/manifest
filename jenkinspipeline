@@ -56,7 +56,7 @@ pipeline {
         stage('OWASP Dependency Check') {
             steps {
                 withCredentials([
-                    string(credentialsId: 'nvd-key', variable: 'NVD_KEY')
+                    string(credentialsId: 'nvd_key', variable: 'NVD_KEY')
                 ]) {
                     dependencyCheck(
                         odcInstallation: 'DP-Check',
