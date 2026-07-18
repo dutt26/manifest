@@ -16,7 +16,7 @@ pipeline {
         }
         stage("Code") {
             steps {
-                git "https://github.com/devops0014/Zomato-Project.git"
+                git "https://github.com/dutt26/Zomato-Project.git"
             }
         }
         stage("Sonarqube Analysis") {
