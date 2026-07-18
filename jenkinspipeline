@@ -1,0 +1,80 @@
+pipeline {
+    agent any
+    
+    tools {
+        jdk 'jdk17'
+        nodejs 'node16'
+    }
+    environment {
+        SCANNER_HOME = tool 'mysonar'
+    }
+    stages {
+        stage("Clean WS") {
+            steps {
+                cleanWs()
+            }
+        }
+        stage("Code") {
+            steps {
+                git "https://github.com/devops0014/Zomato-Project.git"
+            }
+        }
+        stage("Sonarqube Analysis") {
+            steps {
+                withSonarQubeEnv('mysonar') {
+                    sh """$SCANNER_HOME/bin/sonar-scanner \
+                        -Dsonar.projectName=zomato \
+                        -Dsonar.projectKey=zomato"""
+                }
+            }
+        }
+        stage("Quality Gates") {
+            steps {
+                script {
+                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar-token'
+                }
+            }
+        }
+        stage("Install Dependencies") {
+            steps {
+                sh 'npm install'
+            }
+        }
+        stage("OWASP") {
+            steps {
+                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
+                dependencyCheckPublisher pattern: ' /dependency-check-report.xml'
+            }
+        }
+        stage("Trivy") {
+            steps {
+                sh 'trivy fs . > trivyfs.txt'
+            }
+        }
+        stage("Build") {
+            steps {
+                sh 'docker build -t image1 .'
+            }
+        }
+        stage("Tag & Push") {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'docker-password') {
+                        sh 'docker tag image1 yashwanthdutt26/mydockerproject:myzomatoimage'
+                        sh 'docker push yashwanthdutt26/mydockerproject:myzomatoimage'
+                    }
+                }
+            }
+        }
+        stage("Scan the Image") {
+            steps {
+                sh 'trivy image yashwanthdutt26/mydockerproject:myzomatoimage'
+            }
+        }
+        stage("Container") {
+            steps {
+                sh 'docker run -d --name cont1 -p 3000:3000 yashwanthdutt26/mydockerproject:myzomatoimage'
+            }
+        }
+    }
+}
