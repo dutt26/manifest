@@ -59,7 +59,7 @@ pipeline {
         stage("Tag & Push") {
             steps {
                 script {
-                    withDockerRegistry(credentialsId: 'docker-password') {
+                    withDockerRegistry(credentialsId: 'DOCKER') {
                         sh 'docker tag image1 yashwanthdutt26/mydockerproject:myzomatoimage'
                         sh 'docker push yashwanthdutt26/mydockerproject:myzomatoimage'
                     }
